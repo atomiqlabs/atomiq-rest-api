@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  atomiq-rest-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atomiq-rest-api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - STORAGE_TYPE=sqlite
+      - STORAGE_PATH=/app/data/swaps.db
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=*
+    restart: unless-stopped
+    networks:
+      - atomiq-network
+
+networks:
+  atomiq-network:
+    driver: bridge
