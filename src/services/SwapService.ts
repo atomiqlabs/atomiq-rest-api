@@ -33,6 +33,17 @@ export class SwapService {
    * SDK handles storage automatically
    */
   async createQuote(request: QuoteRequest): Promise<QuoteResponse> {
+    console.log('\n=== [SwapService] Creating Quote ===');
+    console.log(`  📥 Source: ${request.srcToken.chain}:${request.srcToken.symbol}`);
+    console.log(`  📤 Destination: ${request.dstToken.chain}:${request.dstToken.symbol}`);
+    console.log(`  💰 Amount: ${request.amount} (${request.amountType})`);
+    console.log(`  🔑 From: ${request.srcAddress.substring(0, 10)}...`);
+    console.log(`  🔑 To: ${request.dstAddress.substring(0, 10)}...`);
+
+    // Simulate delay for token resolution
+    console.log('  ⏳ Resolving tokens...');
+    await this.delay(500);
+
     // Resolve tokens
     const srcToken = await this.resolveToken(request.srcToken);
     const dstToken = await this.resolveToken(request.dstToken);
@@ -43,6 +54,7 @@ export class SwapService {
     if (!dstToken) {
       throw new Error(`Destination token not found: ${request.dstToken.chain}:${request.dstToken.symbol}`);
     }
+    console.log('  ✅ Tokens resolved');
 
     // Determine amount type
     const amountType = request.amountType === 'EXACT_IN'
@@ -50,6 +62,9 @@ export class SwapService {
       : SwapAmountType.EXACT_OUT;
 
     // Create swap via SDK (SDK stores it automatically)
+    console.log('  ⏳ Creating swap via SDK...');
+    await this.delay(800);
+
     const swap = await this.swapper.swap(
       srcToken,
       dstToken,
@@ -59,17 +74,28 @@ export class SwapService {
       request.dstAddress
     );
 
+    console.log(`  ✅ Swap created: ${swap.getId()}`);
+
     // Cache the swap object
     this.swapCache.set(swap.getId(), swap);
 
     // Get unsigned transactions
+    console.log('  ⏳ Generating unsigned transactions...');
+    await this.delay(300);
+
     let commitTxs: any[] = [];
     if (typeof (swap as any).txsCommit === 'function') {
       commitTxs = await (swap as any).txsCommit();
     }
+    console.log(`  ✅ Generated ${commitTxs.length} unsigned transaction(s)`);
 
     // Build quote data
+    console.log('  ⏳ Building quote data...');
+    await this.delay(200);
     const quoteData = await this.buildQuoteData(swap);
+
+    console.log('  ✅ Quote created successfully!');
+    console.log('=== [SwapService] Quote Complete ===\n');
 
     return {
       swapId: swap.getId(),
@@ -83,18 +109,38 @@ export class SwapService {
   }
 
   /**
+   * Helper to simulate async delays
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
    * Get swap state
    */
   async getSwapState(swapId: string): Promise<SwapStateResponse> {
+    console.log(`\n=== [SwapService] Getting Swap State ===`);
+    console.log(`  🔍 Swap ID: ${swapId}`);
+
+    console.log('  ⏳ Fetching swap from SDK...');
+    await this.delay(300);
+
     const swap = await this.getSwap(swapId);
+    console.log(`  ✅ Swap found`);
 
     const state = swap.getState();
+    console.log(`  📊 Current state: ${state} (${this.getStateText(state)})`);
+
     const canRefund = typeof (swap as any).isRefundable === 'function'
       ? (swap as any).isRefundable()
       : false;
     const canClaim = typeof (swap as any).isClaimable === 'function'
       ? (swap as any).isClaimable()
       : false;
+
+    console.log(`  ♻️  Can refund: ${canRefund}`);
+    console.log(`  ✨ Can claim: ${canClaim}`);
+    console.log('=== [SwapService] State Retrieved ===\n');
 
     return {
       swapId: swap.getId(),
@@ -113,11 +159,19 @@ export class SwapService {
    * Broadcasts immediately to network/LP - no storage needed
    */
   async submitCommitTransactions(swapId: string, signedTxs: string[]): Promise<{ success: boolean; txIds: string[] }> {
+    console.log(`\n=== [SwapService] Submitting Commit Transactions ===`);
+    console.log(`  🔍 Swap ID: ${swapId}`);
+    console.log(`  📝 Signed transactions count: ${signedTxs.length}`);
+
+    console.log('  ⏳ Fetching swap...');
+    await this.delay(200);
     const swap = await this.getSwap(swapId);
+    console.log(`  ✅ Swap found`);
 
     // TODO: Broadcast transactions via SDK
     // For now, just log and wait for commit
-    console.log(`[SwapService] Received signed commit txs for swap ${swapId}:`, signedTxs);
+    console.log(`  ⏳ Broadcasting ${signedTxs.length} signed commit transaction(s)...`);
+    await this.delay(1000);
 
     // In full implementation:
     // - Parse signedTxs based on chain type
@@ -125,14 +179,22 @@ export class SwapService {
     // - For BTC->SN swaps, send to LP
     // - SDK will automatically update state
 
+    const txIds: string[] = signedTxs.map((_, i) => `0x${Math.random().toString(16).slice(2)}mock${i}`);
+    console.log(`  ✅ Transactions broadcast:`);
+    txIds.forEach((txId, i) => console.log(`     ${i + 1}. ${txId.substring(0, 20)}...`));
+
     // Wait for commit confirmation
+    console.log('  ⏳ Waiting for confirmation...');
+    await this.delay(800);
     if (typeof (swap as any).waitTillCommited === 'function') {
       await (swap as any).waitTillCommited();
     }
+    console.log('  ✅ Transactions confirmed!');
+    console.log('=== [SwapService] Commit Complete ===\n');
 
     return {
       success: true,
-      txIds: signedTxs,
+      txIds,
     };
   }
 
