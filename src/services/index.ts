@@ -1,2 +1,1 @@
-export * from './SdkService';
-export * from './SwapService';
+export { swapper } from './SdkService';
