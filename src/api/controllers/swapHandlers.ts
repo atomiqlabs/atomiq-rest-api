@@ -1,12 +1,14 @@
 import { Request, Response } from 'express';
 import { swapper } from '../../services';
-import { SwapAmountType } from '@atomiqlabs/sdk-lib';
+import { SwapAmountType, FeeType } from '@atomiqlabs/sdk-lib';
 import {
   QuoteRequest,
   CommitTransactionRequest,
   SwapListQuery,
   SwapListResponse,
 } from '../../types/api';
+import { parseFormattedAmount, toBaseUnits, sanitizeBigInts } from '../../utils/tokenHelpers';
+import { getStateText, getStateDescription } from '../../utils/swapStates';
 
 /**
  * POST /api/v1/quotes
@@ -40,16 +42,37 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // TODO: Implement token resolution from SDK token registry
-  // For now, this is a placeholder
-  const srcToken = null as any;
-  const dstToken = null as any;
+  // Resolve tokens using SDK
+  let srcToken: any;
+  let dstToken: any;
 
-  if (!srcToken) {
-    throw new Error(`Source token not found: ${quoteRequest.srcToken.chain}:${quoteRequest.srcToken.symbol}`);
+  try {
+    // Try chain-qualified ticker first (e.g., "STARKNET-ETH")
+    if (quoteRequest.srcToken.chain && quoteRequest.srcToken.symbol) {
+      const chainQualified = `${quoteRequest.srcToken.chain.toUpperCase()}-${quoteRequest.srcToken.symbol.toUpperCase()}`;
+      srcToken = swapper.getToken(chainQualified);
+    } else if (quoteRequest.srcToken.address) {
+      // Try by contract address
+      srcToken = swapper.getToken(quoteRequest.srcToken.address);
+    } else {
+      // Try by simple ticker
+      srcToken = swapper.getToken(quoteRequest.srcToken.symbol.toUpperCase());
+    }
+  } catch (error: any) {
+    throw new Error(`Source token not found: ${JSON.stringify(quoteRequest.srcToken)}. ${error.message}`);
   }
-  if (!dstToken) {
-    throw new Error(`Destination token not found: ${quoteRequest.dstToken.chain}:${quoteRequest.dstToken.symbol}`);
+
+  try {
+    if (quoteRequest.dstToken.chain && quoteRequest.dstToken.symbol) {
+      const chainQualified = `${quoteRequest.dstToken.chain.toUpperCase()}-${quoteRequest.dstToken.symbol.toUpperCase()}`;
+      dstToken = swapper.getToken(chainQualified);
+    } else if (quoteRequest.dstToken.address) {
+      dstToken = swapper.getToken(quoteRequest.dstToken.address);
+    } else {
+      dstToken = swapper.getToken(quoteRequest.dstToken.symbol.toUpperCase());
+    }
+  } catch (error: any) {
+    throw new Error(`Destination token not found: ${JSON.stringify(quoteRequest.dstToken)}. ${error.message}`);
   }
 
   // Determine amount type
@@ -73,35 +96,136 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     commitTxs = await (swap as any).txsCommit();
   }
 
-  // TODO: Extract real quote data from swap.serialize()
-  // TODO: Get pricing from SDK
-  const serialized = swap.serialize();
+  // Extract real quote data from swap object
+  const inputFormatted = swap.getInput().toString();
+  const inputWithoutFeeFormatted = swap.getInputWithoutFee().toString();
+  const outputFormatted = swap.getOutput().toString();
 
-  res.status(201).json({
+  const inputParsed = parseFormattedAmount(inputFormatted);
+  const inputWithoutFeeParsed = parseFormattedAmount(inputWithoutFeeFormatted);
+  const outputParsed = parseFormattedAmount(outputFormatted);
+
+  // Get fee information
+  const feeInfo = swap.getFee();
+  const feeInSrcFormatted = feeInfo.amountInSrcToken.toString();
+  const feeInDstFormatted = feeInfo.amountInDstToken.toString();
+
+  const feeInSrcParsed = parseFormattedAmount(feeInSrcFormatted);
+  const feeInDstParsed = parseFormattedAmount(feeInDstFormatted);
+
+  // Get fee breakdown
+  const feeBreakdown = swap.getFeeBreakdown();
+  const feeBreakdownData = feeBreakdown.map((feeItem: any) => {
+    const feeInSrc = parseFormattedAmount(feeItem.fee.amountInSrcToken.toString());
+    const feeInDst = parseFormattedAmount(feeItem.fee.amountInDstToken.toString());
+
+    return {
+      type: FeeType[feeItem.type],
+      fee: {
+        amountInSrcToken: {
+          token: {
+            chain: srcToken.chain,
+            symbol: srcToken.ticker,
+            decimals: srcToken.decimals,
+          },
+          rawAmount: toBaseUnits(feeInSrc.amount, srcToken.decimals),
+          amount: feeInSrc.amount,
+        },
+        amountInDstToken: {
+          token: {
+            chain: dstToken.chain,
+            symbol: dstToken.ticker,
+            decimals: dstToken.decimals,
+          },
+          rawAmount: toBaseUnits(feeInDst.amount, dstToken.decimals),
+          amount: feeInDst.amount,
+        },
+      },
+    };
+  });
+
+  // Get price information
+  const priceInfo = swap.getPriceInfo();
+  const priceDifference = priceInfo.difference;
+
+  // Serialize price difference properly (convert BigInt to number)
+  let diffValue: number;
+  if (typeof priceDifference === 'object' && priceDifference !== null) {
+    diffValue = priceDifference.percentage;
+  } else {
+    diffValue = Number(priceDifference);
+  }
+
+  const response = {
     swapId: swap.getId(),
-    state: getStateText(swap.getState()),
+    state: getStateText(swap.getState(), swap.getType()),
     stateNumber: swap.getState(),
     quote: {
-      // TODO: Extract actual data from swap object
-      input: { token: {}, rawAmount: '0', amount: '0' },
-      inputWithoutFee: { token: {}, rawAmount: '0', amount: '0' },
-      output: { token: {}, rawAmount: '0', amount: '0' },
+      input: {
+        token: {
+          chain: srcToken.chain,
+          symbol: srcToken.ticker,
+          decimals: srcToken.decimals,
+          name: srcToken.name,
+        },
+        rawAmount: toBaseUnits(inputParsed.amount, srcToken.decimals),
+        amount: inputParsed.amount,
+      },
+      inputWithoutFee: {
+        token: {
+          chain: srcToken.chain,
+          symbol: srcToken.ticker,
+          decimals: srcToken.decimals,
+          name: srcToken.name,
+        },
+        rawAmount: toBaseUnits(inputWithoutFeeParsed.amount, srcToken.decimals),
+        amount: inputWithoutFeeParsed.amount,
+      },
+      output: {
+        token: {
+          chain: dstToken.chain,
+          symbol: dstToken.ticker,
+          decimals: dstToken.decimals,
+          name: dstToken.name,
+        },
+        rawAmount: toBaseUnits(outputParsed.amount, dstToken.decimals),
+        amount: outputParsed.amount,
+      },
       fees: {
-        amountInSrcToken: { token: {}, rawAmount: '0', amount: '0' },
-        amountInDstToken: { token: {}, rawAmount: '0', amount: '0' },
+        amountInSrcToken: {
+          token: {
+            chain: srcToken.chain,
+            symbol: srcToken.ticker,
+            decimals: srcToken.decimals,
+          },
+          rawAmount: toBaseUnits(feeInSrcParsed.amount, srcToken.decimals),
+          amount: feeInSrcParsed.amount,
+        },
+        amountInDstToken: {
+          token: {
+            chain: dstToken.chain,
+            symbol: dstToken.ticker,
+            decimals: dstToken.decimals,
+          },
+          rawAmount: toBaseUnits(feeInDstParsed.amount, dstToken.decimals),
+          amount: feeInDstParsed.amount,
+        },
       },
-      feeBreakdown: [],
+      feeBreakdown: feeBreakdownData,
       priceInfo: {
-        marketPrice: 0,
-        swapPrice: 0,
-        difference: '0',
+        marketPrice: priceInfo.marketPrice,
+        swapPrice: priceInfo.swapPrice,
+        difference: diffValue,
       },
-      quoteExpiry: serialized.expiry,
+      quoteExpiry: swap.getQuoteExpiry(),
     },
     unsignedTxs: {
       commit: commitTxs,
     },
-  });
+  };
+
+  // Sanitize any BigInts in the response before sending
+  res.status(201).json(sanitizeBigInts(response));
 }
 
 /**
@@ -123,7 +247,7 @@ export async function getSwapState(req: Request, res: Response): Promise<void> {
 
   res.json({
     swapId: swap.getId(),
-    state: getStateText(state),
+    state: getStateText(state, swap.getType()),
     stateNumber: state,
     stateText: getStateDescription(state, swap.getType()),
     canRefund,
@@ -138,28 +262,50 @@ export async function getSwapState(req: Request, res: Response): Promise<void> {
  * List swaps with filters
  */
 export async function listSwaps(req: Request, res: Response): Promise<void> {
-  const query: SwapListQuery = {
-    address: req.query.address as string,
-    state: req.query.state as string,
-    chain: req.query.chain as string,
-    type: req.query.type as string,
-    limit: req.query.limit ? parseInt(req.query.limit as string, 10) : 20,
-    offset: req.query.offset ? parseInt(req.query.offset as string, 10) : 0,
-  };
+  const { address, chain, type } = req.query;
 
-  // TODO: Implement actual SDK query methods
-  // The SDK should have methods to query swaps by address/state/chain
-  const swaps: any[] = [];
-  const total = 0;
+  if (!address || !chain) {
+    res.status(400).json({
+      error: 'ValidationError',
+      message: 'address and chain query parameters are required',
+    });
+    return;
+  }
 
-  const response: SwapListResponse = {
-    swaps,
-    total,
-    limit: query.limit!,
-    offset: query.offset!,
-  };
+  try {
+    let allSwaps: any[] = [];
 
-  res.json(response);
+    // Query based on type filter
+    if (!type || type === 'refundable') {
+      const refundable = await swapper.getRefundableSwaps(
+        chain as any,
+        address as string
+      );
+      allSwaps.push(...refundable.map(s => ({ ...s.serialize(), actionType: 'refundable' })));
+    }
+
+    if (!type || type === 'claimable') {
+      const claimable = await swapper.getClaimableSwaps(
+        chain as any,
+        address as string
+      );
+      allSwaps.push(...claimable.map(s => ({ ...s.serialize(), actionType: 'claimable' })));
+    }
+
+    const response: SwapListResponse = {
+      swaps: allSwaps,
+      total: allSwaps.length,
+      limit: allSwaps.length,
+      offset: 0,
+    };
+
+    res.json(response);
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'SwapQueryError',
+      message: error.message,
+    });
+  }
 }
 
 /**
@@ -263,18 +409,3 @@ export async function submitRefundTransactions(req: Request, res: Response): Pro
   });
 }
 
-/**
- * Helper: Get state text from state number
- */
-function getStateText(state: number): string {
-  // TODO: Map state numbers to text using SDK enums
-  return `STATE_${state}`;
-}
-
-/**
- * Helper: Get user-friendly state description
- */
-function getStateDescription(state: number, swapType: any): string {
-  // TODO: Provide user-friendly descriptions based on swap type and state
-  return `Swap is in state ${state}`;
-}

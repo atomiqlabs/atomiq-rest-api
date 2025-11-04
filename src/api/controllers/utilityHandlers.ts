@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { swapper } from '../../services';
 import { HealthResponse } from '../../types/api';
 
 // Track server start time
@@ -25,17 +26,40 @@ export async function getHealth(req: Request, res: Response): Promise<void> {
  * Get swap limits
  */
 export async function getLimits(req: Request, res: Response): Promise<void> {
-  // TODO: Implement actual limits query from SDK
-  res.json({
-    input: {
-      min: '0.001',
-      max: '10',
-    },
-    output: {
-      min: '0.0001',
-      max: '1',
-    },
-  });
+  const { srcToken, dstToken } = req.query;
+
+  if (!srcToken || !dstToken) {
+    res.status(400).json({
+      error: 'ValidationError',
+      message: 'srcToken and dstToken query parameters are required',
+    });
+    return;
+  }
+
+  try {
+    // Resolve tokens
+    const src = swapper.getToken(srcToken as string) as any;
+    const dst = swapper.getToken(dstToken as string) as any;
+
+    // Get limits from SDK
+    const limits = swapper.getSwapLimits(src, dst);
+
+    res.json({
+      input: {
+        min: limits.input.min?.toString() || '0',
+        max: limits.input.max?.toString() || '0',
+      },
+      output: {
+        min: limits.output.min?.toString() || null,
+        max: limits.output.max?.toString() || null,
+      },
+    });
+  } catch (error: any) {
+    res.status(404).json({
+      error: 'TokenNotFound',
+      message: error.message,
+    });
+  }
 }
 
 /**
@@ -43,24 +67,21 @@ export async function getLimits(req: Request, res: Response): Promise<void> {
  * Get supported tokens
  */
 export async function getTokens(req: Request, res: Response): Promise<void> {
-  // TODO: Get actual tokens from SDK token registry
+  // Get input and output tokens separately
+  const inputTokens = swapper.getSupportedTokens(true);
+  const outputTokens = swapper.getSupportedTokens(false);
+
+  // Convert to API format
+  const formatToken = (token: any) => ({
+    chain: token.chain,
+    symbol: token.ticker,
+    name: token.name,
+    decimals: token.decimals,
+    address: (token as any).address || undefined,
+  });
+
   res.json({
-    tokens: [
-      {
-        chain: 'bitcoin',
-        symbol: 'BTC',
-        decimals: 8,
-      },
-      {
-        chain: 'starknet',
-        symbol: 'STRK',
-        decimals: 18,
-      },
-      {
-        chain: 'solana',
-        symbol: 'SOL',
-        decimals: 9,
-      },
-    ],
+    input: inputTokens.map(formatToken),
+    output: outputTokens.map(formatToken),
   });
 }
