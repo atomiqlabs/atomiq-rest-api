@@ -1,4 +1,5 @@
 import { createApp } from './app';
+import { swapper } from './services';
 import config from './config';
 
 /**
@@ -25,9 +26,21 @@ async function start() {
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       console.log(`\n${signal} received. Shutting down gracefully...`);
-      server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
+
+      // Stop accepting new requests
+      server.close(async () => {
+        console.log('HTTP server closed');
+
+        // Stop the swapper (closes LP connections, event listeners, etc.)
+        try {
+          await swapper.stop();
+          console.log('Swapper stopped');
+          console.log('Shutdown complete');
+          process.exit(0);
+        } catch (error) {
+          console.error('Error during swapper shutdown:', error);
+          process.exit(1);
+        }
       });
     };
 
