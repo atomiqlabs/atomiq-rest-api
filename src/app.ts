@@ -5,7 +5,7 @@ import morgan from 'morgan';
 import { AppConfig } from './config';
 import { errorHandler, notFoundHandler } from './api/middleware';
 import { createRouter } from './api/routes';
-import { SdkService, SwapService } from './services';
+import { swapper, SwapService } from './services';
 import { SwapController, UtilityController } from './api/controllers';
 
 /**
@@ -30,8 +30,14 @@ export async function createApp(config: AppConfig): Promise<Express> {
 
   // Initialize SDK (handles storage internally)
   console.log('[App] Initializing Atomiq SDK...');
-  const sdkService = new SdkService(config);
-  const swapper = await sdkService.initialize();
+  
+  // Initialize the swapper (connects to LPs, checks existing swaps)
+  console.log('[SdkService] Calling swapper.init()...');
+  await swapper.init();
+
+
+
+// use swapper itself
 
   // Create services (stateless wrapper around SDK)
   const swapService = new SwapService(swapper);

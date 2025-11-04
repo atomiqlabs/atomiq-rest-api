@@ -18,15 +18,15 @@ export interface AppConfig {
 
   // SDK
   sdk: {
-    network: string;
-    lpDiscoveryUrl: string;
+    network: "MAINNET" | "TESTNET" | "TESTNET4" | "REGTEST";
+    lpDiscoveryUrl?: string;
+    mempoolApi?: string;
   };
 
   // Chain RPCs
   chains: {
     starknetRpc: string;
     solanaRpc: string;
-    bitcoinRpc: string;
   };
 
   // Logging
@@ -53,14 +53,14 @@ export const config: AppConfig = {
   },
 
   sdk: {
-    network: process.env.ATOMIQ_NETWORK || 'mainnet',
-    lpDiscoveryUrl: process.env.LP_DISCOVERY_URL || 'https://raw.githubusercontent.com/AtomiqLabs/atomiq-lp-list/main/lp-list.json',
+    network: process.env.ATOMIQ_NETWORK as "MAINNET" | "TESTNET" | "TESTNET4" | "REGTEST",
+    lpDiscoveryUrl: process.env.LP_DISCOVERY_URL,
+    mempoolApi: process.env.MEMPOOL_API!,
   },
 
   chains: {
     starknetRpc: process.env.STARKNET_RPC || 'http://localhost:5050',
     solanaRpc: process.env.SOLANA_RPC || 'http://localhost:8899',
-    bitcoinRpc: process.env.BITCOIN_RPC || 'http://user:password@localhost:18332',
   },
 
   logLevel: process.env.LOG_LEVEL || 'info',
