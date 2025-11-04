@@ -5,7 +5,8 @@
 export interface QuoteRequest {
   srcToken: TokenIdentifier;
   dstToken: TokenIdentifier;
-  amount: string;
+  amount?: string;        // Decimal format: "1.5"
+  rawAmount?: string;     // Raw base units: "1500000000000000000"
   amountType: 'EXACT_IN' | 'EXACT_OUT';
   srcAddress: string;
   dstAddress: string;
@@ -42,8 +43,7 @@ export interface SwapQuoteData {
 
 export interface TokenAmountData {
   token: TokenData;
-  rawAmount: string;
-  amount: string;
+  rawAmount: string;  // Base units as string (e.g., "1500000000000000000")
   usdValue?: number;
 }
 

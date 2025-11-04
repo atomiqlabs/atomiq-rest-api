@@ -4,10 +4,9 @@ import { SwapAmountType, FeeType } from '@atomiqlabs/sdk-lib';
 import {
   QuoteRequest,
   CommitTransactionRequest,
-  SwapListQuery,
   SwapListResponse,
 } from '../../types/api';
-import { parseFormattedAmount, toBaseUnits, sanitizeBigInts } from '../../utils/tokenHelpers';
+import { tokenAmountToJSON } from '../../utils/sdkHelpers';
 import { getStateText, getStateDescription } from '../../utils/swapStates';
 
 /**
@@ -26,10 +25,27 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  if (!quoteRequest.amount || !quoteRequest.amountType) {
+  // Validate amount fields - exactly one must be provided
+  if (quoteRequest.amount && quoteRequest.rawAmount) {
     res.status(400).json({
       error: 'ValidationError',
-      message: 'amount and amountType are required',
+      message: 'Cannot specify both amount and rawAmount - provide exactly one',
+    });
+    return;
+  }
+
+  if (!quoteRequest.amount && !quoteRequest.rawAmount) {
+    res.status(400).json({
+      error: 'ValidationError',
+      message: 'Must specify either amount (decimal) or rawAmount (base units)',
+    });
+    return;
+  }
+
+  if (!quoteRequest.amountType) {
+    res.status(400).json({
+      error: 'ValidationError',
+      message: 'amountType is required',
     });
     return;
   }
@@ -80,11 +96,18 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     ? SwapAmountType.EXACT_IN
     : SwapAmountType.EXACT_OUT;
 
+  // Convert amount based on format
+  // - If rawAmount provided: convert string to BigInt
+  // - If amount provided: pass decimal string as-is
+  const amountForSDK: string | bigint = quoteRequest.rawAmount
+    ? BigInt(quoteRequest.rawAmount)
+    : quoteRequest.amount!;
+
   // Create swap via SDK - SDK stores it automatically
   const swap = await swapper.swap(
     srcToken,
     dstToken,
-    quoteRequest.amount,
+    amountForSDK,
     amountType,
     quoteRequest.srcAddress,
     quoteRequest.dstAddress
@@ -96,136 +119,49 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     commitTxs = await (swap as any).txsCommit();
   }
 
-  // Extract real quote data from swap object
-  const inputFormatted = swap.getInput().toString();
-  const inputWithoutFeeFormatted = swap.getInputWithoutFee().toString();
-  const outputFormatted = swap.getOutput().toString();
-
-  const inputParsed = parseFormattedAmount(inputFormatted);
-  const inputWithoutFeeParsed = parseFormattedAmount(inputWithoutFeeFormatted);
-  const outputParsed = parseFormattedAmount(outputFormatted);
-
-  // Get fee information
-  const feeInfo = swap.getFee();
-  const feeInSrcFormatted = feeInfo.amountInSrcToken.toString();
-  const feeInDstFormatted = feeInfo.amountInDstToken.toString();
-
-  const feeInSrcParsed = parseFormattedAmount(feeInSrcFormatted);
-  const feeInDstParsed = parseFormattedAmount(feeInDstFormatted);
-
-  // Get fee breakdown
-  const feeBreakdown = swap.getFeeBreakdown();
-  const feeBreakdownData = feeBreakdown.map((feeItem: any) => {
-    const feeInSrc = parseFormattedAmount(feeItem.fee.amountInSrcToken.toString());
-    const feeInDst = parseFormattedAmount(feeItem.fee.amountInDstToken.toString());
-
-    return {
-      type: FeeType[feeItem.type],
-      fee: {
-        amountInSrcToken: {
-          token: {
-            chain: srcToken.chain,
-            symbol: srcToken.ticker,
-            decimals: srcToken.decimals,
-          },
-          rawAmount: toBaseUnits(feeInSrc.amount, srcToken.decimals),
-          amount: feeInSrc.amount,
-        },
-        amountInDstToken: {
-          token: {
-            chain: dstToken.chain,
-            symbol: dstToken.ticker,
-            decimals: dstToken.decimals,
-          },
-          rawAmount: toBaseUnits(feeInDst.amount, dstToken.decimals),
-          amount: feeInDst.amount,
-        },
-      },
-    };
-  });
-
-  // Get price information
+  // Extract quote data directly from SDK objects
   const priceInfo = swap.getPriceInfo();
-  const priceDifference = priceInfo.difference;
 
-  // Serialize price difference properly (convert BigInt to number)
-  let diffValue: number;
-  if (typeof priceDifference === 'object' && priceDifference !== null) {
-    diffValue = priceDifference.percentage;
-  } else {
-    diffValue = Number(priceDifference);
-  }
+  // Extract percentage from PercentagePPM object (explicit BigInt handling)
+  const priceDifference = priceInfo.difference.percentage;
 
   const response = {
     swapId: swap.getId(),
     state: getStateText(swap.getState(), swap.getType()),
     stateNumber: swap.getState(),
     quote: {
-      input: {
-        token: {
-          chain: srcToken.chain,
-          symbol: srcToken.ticker,
-          decimals: srcToken.decimals,
-          name: srcToken.name,
-        },
-        rawAmount: toBaseUnits(inputParsed.amount, srcToken.decimals),
-        amount: inputParsed.amount,
-      },
-      inputWithoutFee: {
-        token: {
-          chain: srcToken.chain,
-          symbol: srcToken.ticker,
-          decimals: srcToken.decimals,
-          name: srcToken.name,
-        },
-        rawAmount: toBaseUnits(inputWithoutFeeParsed.amount, srcToken.decimals),
-        amount: inputWithoutFeeParsed.amount,
-      },
-      output: {
-        token: {
-          chain: dstToken.chain,
-          symbol: dstToken.ticker,
-          decimals: dstToken.decimals,
-          name: dstToken.name,
-        },
-        rawAmount: toBaseUnits(outputParsed.amount, dstToken.decimals),
-        amount: outputParsed.amount,
-      },
+      input: tokenAmountToJSON(swap.getInput()),
+      inputWithoutFee: tokenAmountToJSON(swap.getInputWithoutFee()),
+      output: tokenAmountToJSON(swap.getOutput()),
       fees: {
-        amountInSrcToken: {
-          token: {
-            chain: srcToken.chain,
-            symbol: srcToken.ticker,
-            decimals: srcToken.decimals,
-          },
-          rawAmount: toBaseUnits(feeInSrcParsed.amount, srcToken.decimals),
-          amount: feeInSrcParsed.amount,
-        },
-        amountInDstToken: {
-          token: {
-            chain: dstToken.chain,
-            symbol: dstToken.ticker,
-            decimals: dstToken.decimals,
-          },
-          rawAmount: toBaseUnits(feeInDstParsed.amount, dstToken.decimals),
-          amount: feeInDstParsed.amount,
-        },
+        amountInSrcToken: tokenAmountToJSON(swap.getFee().amountInSrcToken),
+        amountInDstToken: tokenAmountToJSON(swap.getFee().amountInDstToken),
       },
-      feeBreakdown: feeBreakdownData,
+      feeBreakdown: swap.getFeeBreakdown().map((item: any) => ({
+        type: FeeType[item.type],
+        fee: {
+          amountInSrcToken: tokenAmountToJSON(item.fee.amountInSrcToken),
+          amountInDstToken: tokenAmountToJSON(item.fee.amountInDstToken),
+        },
+      })),
       priceInfo: {
         marketPrice: priceInfo.marketPrice,
         swapPrice: priceInfo.swapPrice,
-        difference: diffValue,
+        difference: priceDifference,
       },
       quoteExpiry: swap.getQuoteExpiry(),
     },
     unsignedTxs: {
-      commit: commitTxs,
+      commit: commitTxs.map(tx =>
+        JSON.parse(JSON.stringify(tx, (_, v) =>
+          typeof v === 'bigint' ? v.toString() : v
+        ))
+      ),
     },
   };
 
-  // Sanitize any BigInts in the response before sending
-  res.status(201).json(sanitizeBigInts(response));
+  // All BigInts have been explicitly converted to strings
+  res.status(201).json(response);
 }
 
 /**
