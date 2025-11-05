@@ -3,8 +3,8 @@
  */
 
 export interface QuoteRequest {
-  srcToken: TokenIdentifier;
-  dstToken: TokenIdentifier;
+  srcToken: string;
+  dstToken: string;
   amount?: string;        // Decimal format: "1.5"
   rawAmount?: string;     // Raw base units: "1500000000000000000"
   amountType: 'EXACT_IN' | 'EXACT_OUT';

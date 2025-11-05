@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
 import { swapper } from '../../services';
-import { SwapAmountType, FeeType } from '@atomiqlabs/sdk-lib';
+import { SwapAmountType, FeeType, SwapType, IEscrowSelfInitSwap } from '@atomiqlabs/sdk-lib';
 import {
   QuoteRequest,
   CommitTransactionRequest,
   SwapListResponse,
 } from '../../types/api';
-import { tokenAmountToJSON } from '../../utils/sdkHelpers';
+import { tokenAmountToJSON, serializeTransactions } from '../../utils/sdkHelpers';
 import { getStateText, getStateDescription } from '../../utils/swapStates';
 
 /**
@@ -58,39 +58,6 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Resolve tokens using SDK
-  let srcToken: any;
-  let dstToken: any;
-
-  try {
-    // Try chain-qualified ticker first (e.g., "STARKNET-ETH")
-    if (quoteRequest.srcToken.chain && quoteRequest.srcToken.symbol) {
-      const chainQualified = `${quoteRequest.srcToken.chain.toUpperCase()}-${quoteRequest.srcToken.symbol.toUpperCase()}`;
-      srcToken = swapper.getToken(chainQualified);
-    } else if (quoteRequest.srcToken.address) {
-      // Try by contract address
-      srcToken = swapper.getToken(quoteRequest.srcToken.address);
-    } else {
-      // Try by simple ticker
-      srcToken = swapper.getToken(quoteRequest.srcToken.symbol.toUpperCase());
-    }
-  } catch (error: any) {
-    throw new Error(`Source token not found: ${JSON.stringify(quoteRequest.srcToken)}. ${error.message}`);
-  }
-
-  try {
-    if (quoteRequest.dstToken.chain && quoteRequest.dstToken.symbol) {
-      const chainQualified = `${quoteRequest.dstToken.chain.toUpperCase()}-${quoteRequest.dstToken.symbol.toUpperCase()}`;
-      dstToken = swapper.getToken(chainQualified);
-    } else if (quoteRequest.dstToken.address) {
-      dstToken = swapper.getToken(quoteRequest.dstToken.address);
-    } else {
-      dstToken = swapper.getToken(quoteRequest.dstToken.symbol.toUpperCase());
-    }
-  } catch (error: any) {
-    throw new Error(`Destination token not found: ${JSON.stringify(quoteRequest.dstToken)}. ${error.message}`);
-  }
-
   // Determine amount type
   const amountType = quoteRequest.amountType === 'EXACT_IN'
     ? SwapAmountType.EXACT_IN
@@ -105,18 +72,29 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
 
   // Create swap via SDK - SDK stores it automatically
   const swap = await swapper.swap(
-    srcToken,
-    dstToken,
+    quoteRequest.srcToken,
+    quoteRequest.dstToken,
     amountForSDK,
     amountType,
     quoteRequest.srcAddress,
     quoteRequest.dstAddress
   );
 
-  // Get unsigned commit transactions
+  // Get unsigned commit transactions only for swap types that require them
+  // - TO_BTC (2): SC -> BTC on-chain (using relay)
+  // - TO_BTCLN (3): SC -> BTC Lightning
+  // - FROM_BTC (0): BTC -> SC
   let commitTxs: any[] = [];
-  if (typeof (swap as any).txsCommit === 'function') {
-    commitTxs = await (swap as any).txsCommit();
+  const swapType = swap.getType();
+
+  const swapTypesWithCommit = [
+    SwapType.TO_BTC,              // 2: SC -> BTC on-chain
+    SwapType.TO_BTCLN,            // 3: SC -> BTC Lightning
+    SwapType.FROM_BTC,            // 0: BTC -> SC
+  ];
+
+  if (swapTypesWithCommit.includes(swapType) && swap instanceof IEscrowSelfInitSwap) {
+    commitTxs = await swap.txsCommit();
   }
 
   // Extract quote data directly from SDK objects
@@ -152,11 +130,7 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
       quoteExpiry: swap.getQuoteExpiry(),
     },
     unsignedTxs: {
-      commit: commitTxs.map(tx =>
-        JSON.parse(JSON.stringify(tx, (_, v) =>
-          typeof v === 'bigint' ? v.toString() : v
-        ))
-      ),
+      commit: serializeTransactions(commitTxs),
     },
   };
 
@@ -258,7 +232,7 @@ export async function getCommitTransactions(req: Request, res: Response): Promis
     txs = await (swap as any).txsCommit();
   }
 
-  res.json({ swapId: id, transactions: txs });
+  res.json({ swapId: id, transactions: serializeTransactions(txs) });
 }
 
 /**
@@ -311,7 +285,7 @@ export async function getRefundTransactions(req: Request, res: Response): Promis
   }
 
   const txs = await (swap as any).txsRefund(signerAddress);
-  res.json({ swapId: id, transactions: txs });
+  res.json({ swapId: id, transactions: serializeTransactions(txs) });
 }
 
 /**
