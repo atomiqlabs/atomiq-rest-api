@@ -25,18 +25,18 @@ export function getStateText(state: number, swapType?: SwapType): string {
   return genericStates[state] || `STATE_${state}`;
 }
 
-/**
- * Get user-friendly state description
- */
-export function getStateDescription(state: number, swapType: SwapType): string {
-  // Generic descriptions
-  const descriptions: Record<number, string> = {
-    0: 'Quote created, waiting for commitment',
-    1: 'Transaction committed, waiting for settlement',
-    2: 'Swap successfully completed and claimed',
-    3: 'Swap refunded',
-    4: 'Quote expired',
-  };
+// /**
+//  * Get user-friendly state description
+//  */
+// export function getStateDescription(state: number, swapType: SwapType): string {
+//   // Generic descriptions
+//   const descriptions: Record<number, string> = {
+//     0: 'Quote created, waiting for commitment',
+//     1: 'Transaction committed, waiting for settlement',
+//     2: 'Swap successfully completed and claimed',
+//     3: 'Swap refunded',
+//     4: 'Quote expired',
+//   };
 
-  return descriptions[state] || `Swap is in state ${state}`;
-}
+//   return descriptions[state] || `Swap is in state ${state}`;
+// }

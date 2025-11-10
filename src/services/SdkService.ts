@@ -4,10 +4,6 @@ import { RpcProvider } from 'starknet';
 import { SqliteStorageManager, SqliteUnifiedStorage } from '@atomiqlabs/storage-sqlite';
 import { config } from '../config';
 
-// Define the chain initializers for type safety
-type ChainInitializers = [StarknetInitializerType];
-type Factory = SwapperFactory<ChainInitializers>;
-
 console.log('[SdkService] Initializing Atomiq SDK...');
 console.log(`[SdkService] Network: ${config.sdk.network}`);
 console.log(`[SdkService] Starknet RPC: ${config.chains.starknetRpc}`);
@@ -17,6 +13,9 @@ console.log(`[SdkService] Starknet RPC: ${config.chains.starknetRpc}`);
 const Factory = new SwapperFactory<[StarknetInitializerType]>([
   StarknetInitializer
 ]);
+
+// const Tokens = Factory.Tokens;
+// console.log('[SdkService] Tokens:', Tokens);
 
 // Initialize RPC connection
 const starknetRpc = new RpcProvider({ nodeUrl: config.chains.starknetRpc });

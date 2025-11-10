@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import {
   createQuote,
-  getSwapState,
-  listSwaps,
-  getCommitTransactions,
-  submitCommitTransactions,
-  getRefundTransactions,
-  submitRefundTransactions,
+  // getSwapState,
+  // listSwaps,
+  // getCommitTransactions,
+  // submitCommitTransactions,
+  // getRefundTransactions,
+  // submitRefundTransactions,
+  // getClaimTransactions,
   getHealth,
   getLimits,
   getTokens,
@@ -26,16 +27,18 @@ export function createRouter(): Router {
   // Quote creation
   router.post('/quotes', asyncHandler(createQuote));
 
-  // Swap management
-  router.get('/swaps', asyncHandler(listSwaps));
-  router.get('/swaps/:id', asyncHandler(getSwapState));
+  // // Swap management
+  // router.get('/swaps', asyncHandler(listSwaps));
+  // router.get('/swaps/:id', asyncHandler(getSwapState));
 
-  // Transaction endpoints
-  router.get('/swaps/:id/txs/commit', asyncHandler(getCommitTransactions));
-  router.post('/swaps/:id/commit', asyncHandler(submitCommitTransactions));
+  // // Transaction endpoints
+  // router.get('/swaps/:id/txs/commit', asyncHandler(getCommitTransactions));
+  // router.post('/swaps/:id/commit', asyncHandler(submitCommitTransactions));
 
-  router.get('/swaps/:id/txs/refund', asyncHandler(getRefundTransactions));
-  router.post('/swaps/:id/refund', asyncHandler(submitRefundTransactions));
+  // router.get('/swaps/:id/txs/refund', asyncHandler(getRefundTransactions));
+  // router.post('/swaps/:id/refund', asyncHandler(submitRefundTransactions));
+
+  // router.get('/swaps/:id/txs/claim', asyncHandler(getClaimTransactions));
 
   return router;
 }

@@ -2,6 +2,25 @@
  * REST API Types for Atomiq Middleware
  */
 
+import { SwapType } from "@atomiqlabs/sdk";
+
+/**
+ * Transaction type identifiers
+ */
+export type TransactionType =
+  | "commit"
+  | "refund"
+
+/**
+ * Unsigned transaction with metadata for client display and execution
+ */
+export interface UnsignedTransactionWithMetadata {
+  chain: string;
+  txType: TransactionType;
+  swapType: SwapType;
+  data: any;
+}
+
 export interface QuoteRequest {
   srcToken: string;
   dstToken: string;
@@ -23,10 +42,7 @@ export interface QuoteResponse {
   state: string;
   stateNumber: number;
   quote: SwapQuoteData;
-  unsignedTxs: {
-    commit: any[];
-    refund?: any[];
-  };
+  unsignedTxs: UnsignedTransactionWithMetadata[];
 }
 
 export interface SwapQuoteData {
@@ -114,9 +130,9 @@ export interface SerializedSwap {
   _swapPriceUSatPerToken: string;
 }
 
-export interface CommitTransactionRequest {
-  signedTxs: string[];
-}
+// export interface CommitTransactionRequest {
+//   signedTxs: string[];
+// }
 
 export interface TransactionSubmissionResponse {
   success: boolean;
