@@ -3,13 +3,13 @@ import { swapper } from '../../services';
 import { SwapAmountType, FeeType, SwapType, IEscrowSelfInitSwap } from '@atomiqlabs/sdk-lib';
 import {
   QuoteRequest,
-  // CommitTransactionRequest,
-  // SwapListResponse,
+  CommitTransactionRequest,
+  SwapListResponse,
 } from '../../types/api';
 import { tokenAmountToJSON } from '../../utils/sdkHelpers';
-import { 
-  getStateText, 
-  // getStateDescription 
+import {
+  getStateText,
+  getStateDescription
 } from '../../utils/swapStates';
 import { wrapTransactionsWithMetadata } from '../../utils/transactionHelpers';
 
@@ -140,34 +140,34 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
   res.status(201).json(response);
 }
 
-// /**
-//  * GET /api/v1/swaps/:id
-//  * Get swap state
-//  */
-// export async function getSwapState(req: Request, res: Response): Promise<void> {
-//   const { id } = req.params;
+/**
+ * GET /api/v1/swaps/:id
+ * Get swap state
+ */
+export async function getSwapState(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
 
-//   const swap = await swapper.getSwapById(id);
-//   const state = swap.getState();
+  const swap = await swapper.getSwapById(id);
+  const state = swap.getState();
 
-//   const canRefund = typeof (swap as any).isRefundable === 'function'
-//     ? (swap as any).isRefundable()
-//     : false;
-//   const canClaim = typeof (swap as any).isClaimable === 'function'
-//     ? (swap as any).isClaimable()
-//     : false;
+  const canRefund = typeof (swap as any).isRefundable === 'function'
+    ? (swap as any).isRefundable()
+    : false;
+  const canClaim = typeof (swap as any).isClaimable === 'function'
+    ? (swap as any).isClaimable()
+    : false;
 
-//   res.json({
-//     swapId: swap.getId(),
-//     state: getStateText(state, swap.getType()),
-//     stateNumber: state,
-//     stateText: getStateDescription(state, swap.getType()),
-//     canRefund,
-//     canClaim,
-//     needsClientAction: canRefund || canClaim,
-//     swap: swap.serialize(),
-//   });
-// }
+  res.json({
+    swapId: swap.getId(),
+    state: getStateText(state, swap.getType()),
+    stateNumber: state,
+    stateText: getStateDescription(state, swap.getType()),
+    canRefund,
+    canClaim,
+    needsClientAction: canRefund || canClaim,
+    swap: swap.serialize(),
+  });
+}
 
 // /**
 //  * GET /api/v1/swaps
@@ -238,40 +238,40 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
 //   res.json({ swapId: id, transactions });
 // }
 
-// /**
-//  * POST /api/v1/swaps/:id/commit
-//  * Submit signed commit transactions
-//  */
-// export async function submitCommitTransactions(req: Request, res: Response): Promise<void> {
-//   const { id } = req.params;
-//   const body: CommitTransactionRequest = req.body;
+/**
+ * POST /api/v1/swaps/:id/commit
+ * Submit signed commit transactions
+ *
+ * Note: Client broadcasts transactions directly to blockchain.
+ * This endpoint triggers the SDK watchdog to detect on-chain commit.
+ */
+export async function submitCommitTransactions(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
 
-//   if (!body.signedTxs || !Array.isArray(body.signedTxs)) {
-//     res.status(400).json({
-//       error: 'ValidationError',
-//       message: 'signedTxs array is required',
-//     });
-//     return;
-//   }
+  const swap = await swapper.getSwapById(id);
 
-//   const swap = await swapper.getSwapById(id);
+  // Client has already broadcast transactions to the blockchain.
+  // SDK watchdog will detect the on-chain commit automatically via polling.
+  // We just wait for the SDK to detect it.
 
-//   // TODO: Implement actual transaction broadcast
-//   // - Parse signedTxs based on chain type
-//   // - Broadcast to appropriate network
-//   // - For BTC->SN swaps, send to LP
-//   // - SDK will automatically update state
+  try {
+    if (typeof (swap as any).waitTillCommited === 'function') {
+      await (swap as any).waitTillCommited();
+    }
 
-//   // Wait for commit confirmation
-//   if (typeof (swap as any).waitTillCommited === 'function') {
-//     await (swap as any).waitTillCommited();
-//   }
-
-//   res.json({
-//     success: true,
-//     txIds: body.signedTxs.map((_, i) => `0x${Math.random().toString(16).slice(2)}mock${i}`),
-//   });
-// }
+    res.json({
+      success: true,
+      message: 'Commit detected on-chain',
+      txIds: (swap as any).getTxIds() || [],
+      state: 'COMMITED',
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'CommitError',
+      message: error.message || 'Failed to detect commit on-chain',
+    });
+  }
+}
 
 // /**
 //  * GET /api/v1/swaps/:id/txs/refund

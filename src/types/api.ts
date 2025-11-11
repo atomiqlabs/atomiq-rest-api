@@ -130,9 +130,9 @@ export interface SerializedSwap {
   _swapPriceUSatPerToken: string;
 }
 
-// export interface CommitTransactionRequest {
-//   signedTxs: string[];
-// }
+export interface CommitTransactionRequest {
+  signedTxs: string[];
+}
 
 export interface TransactionSubmissionResponse {
   success: boolean;

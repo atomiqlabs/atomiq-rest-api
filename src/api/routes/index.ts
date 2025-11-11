@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import {
   createQuote,
-  // getSwapState,
+  getSwapState,
   // listSwaps,
   // getCommitTransactions,
-  // submitCommitTransactions,
+  submitCommitTransactions,
   // getRefundTransactions,
   // submitRefundTransactions,
   // getClaimTransactions,
@@ -27,13 +27,13 @@ export function createRouter(): Router {
   // Quote creation
   router.post('/quotes', asyncHandler(createQuote));
 
-  // // Swap management
+  // Swap management
   // router.get('/swaps', asyncHandler(listSwaps));
-  // router.get('/swaps/:id', asyncHandler(getSwapState));
+  router.get('/swaps/:id', asyncHandler(getSwapState));
 
-  // // Transaction endpoints
+  // Transaction endpoints
   // router.get('/swaps/:id/txs/commit', asyncHandler(getCommitTransactions));
-  // router.post('/swaps/:id/commit', asyncHandler(submitCommitTransactions));
+  router.post('/swaps/:id/commit', asyncHandler(submitCommitTransactions));
 
   // router.get('/swaps/:id/txs/refund', asyncHandler(getRefundTransactions));
   // router.post('/swaps/:id/refund', asyncHandler(submitRefundTransactions));
