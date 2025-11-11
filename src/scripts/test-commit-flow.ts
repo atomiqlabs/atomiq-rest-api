@@ -33,9 +33,6 @@ const starknetWallet = new StarknetKeypairWallet(starknetRpc, starknetKey);
 fs.writeFileSync("starknet.key", starknetKey);
 console.log("Starknet wallet address (transfer STRK here for TX fees): "+starknetWallet.address);
 
-
-
-
 // Helper to make API requests
 async function apiRequest(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
