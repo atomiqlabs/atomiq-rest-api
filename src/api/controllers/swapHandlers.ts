@@ -3,7 +3,6 @@ import { swapper } from '../../services';
 import { SwapAmountType, FeeType, SwapType, IEscrowSelfInitSwap } from '@atomiqlabs/sdk-lib';
 import {
   QuoteRequest,
-  CommitTransactionRequest,
   SwapListResponse,
 } from '../../types/api';
 import { tokenAmountToJSON } from '../../utils/sdkHelpers';
@@ -239,11 +238,11 @@ export async function getSwapState(req: Request, res: Response): Promise<void> {
 // }
 
 /**
- * POST /api/v1/swaps/:id/commit
- * Submit signed commit transactions
+ * GET /api/v1/swaps/:id/commit
+ * Trigger SDK watchdog to detect on-chain commit
  *
- * Note: Client broadcasts transactions directly to blockchain.
- * This endpoint triggers the SDK watchdog to detect on-chain commit.
+ * Note: Client broadcasts transactions directly to blockchain first.
+ * This endpoint triggers the SDK watchdog to poll and detect the commit.
  */
 export async function submitCommitTransactions(req: Request, res: Response): Promise<void> {
   const { id } = req.params;

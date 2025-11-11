@@ -145,11 +145,9 @@ async function testCommitFlow() {
       }
     }
 
-    // Step 4: Notify middleware (triggers SDK watchdog)
-    console.log('\n📤 Step 4: Notifying middleware (triggering SDK watchdog)...');
-    const commitResponse: any = await apiRequest(`/swaps/${swapId}/commit`, {
-      method: 'GET'
-    });
+    // Step 4: Trigger SDK watchdog to detect commit
+    console.log('\n📤 Step 4: Triggering SDK watchdog to detect commit...');
+    const commitResponse: any = await apiRequest(`/swaps/${swapId}/commit`);
 
     console.log('✅ Middleware notified');
     console.log(`   Message: ${commitResponse.message}`);

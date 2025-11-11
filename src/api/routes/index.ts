@@ -33,7 +33,7 @@ export function createRouter(): Router {
 
   // Transaction endpoints
   // router.get('/swaps/:id/txs/commit', asyncHandler(getCommitTransactions));
-  router.post('/swaps/:id/commit', asyncHandler(submitCommitTransactions));
+  router.get('/swaps/:id/commit', asyncHandler(submitCommitTransactions));
 
   // router.get('/swaps/:id/txs/refund', asyncHandler(getRefundTransactions));
   // router.post('/swaps/:id/refund', asyncHandler(submitRefundTransactions));
