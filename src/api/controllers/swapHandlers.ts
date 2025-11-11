@@ -1,11 +1,18 @@
 import { Request, Response } from 'express';
 import { swapper } from '../../services';
-import { SwapAmountType, FeeType, SwapType, IEscrowSelfInitSwap } from '@atomiqlabs/sdk-lib';
+import {
+  ISwap,
+  IEscrowSelfInitSwap,
+  SwapAmountType,
+  FeeType,
+  SwapType
+} from '@atomiqlabs/sdk-lib';
 import {
   QuoteRequest,
 } from '../../types/api';
 import { tokenAmountToJSON } from '../../utils/sdkHelpers';
 import { wrapTransactionsWithMetadata } from '../../utils/transactionHelpers';
+import { getStateName } from '../../utils/stateHelpers';
 
 /**
  * POST /api/v1/quotes
@@ -77,19 +84,18 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     quoteRequest.srcAddress,
     quoteRequest.dstAddress
   );
-  
+
   const chain = swap.chainIdentifier;
-  console.log('[swapHandlers] chain:', chain);
-  
+
   // Get unsigned commit transactions only for swap types that require them
-  let unsignedTxs: any[] = [];
+  let unsignedTxs: ReturnType<typeof wrapTransactionsWithMetadata> = [];
   const swapType = swap.getType();
   const swapTypesWithCommit = [
     SwapType.TO_BTC,              // 2: SC -> BTC on-chain
     SwapType.TO_BTCLN,            // 3: SC -> BTC Lightning
     SwapType.FROM_BTC,            // 0: BTC -> SC
   ];
-  
+
   if (swapTypesWithCommit.includes(swapType) && swap instanceof IEscrowSelfInitSwap) {
     const commitTxs = await swap.txsCommit();
     unsignedTxs = wrapTransactionsWithMetadata(commitTxs, 'commit', chain, swapType);
@@ -103,7 +109,7 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
 
   const response = {
     swapId: swap.getId(),
-    state: swap.getState(),
+    state: getStateName(swap.getState(), swapType),
     stateNumber: swap.getState(),
     quote: {
       input: tokenAmountToJSON(swap.getInput()),
@@ -143,17 +149,18 @@ export async function getSwapState(req: Request, res: Response): Promise<void> {
 
   const swap = await swapper.getSwapById(id);
   const state = swap.getState();
+  const swapType = swap.getType();
 
-  const canRefund = typeof (swap as any).isRefundable === 'function'
-    ? (swap as any).isRefundable()
+  const canRefund = 'isRefundable' in swap && typeof swap.isRefundable === 'function'
+    ? swap.isRefundable()
     : false;
-  const canClaim = typeof (swap as any).isClaimable === 'function'
-    ? (swap as any).isClaimable()
+  const canClaim = 'isClaimable' in swap && typeof swap.isClaimable === 'function'
+    ? swap.isClaimable()
     : false;
 
   res.json({
     swapId: swap.getId(),
-    state,
+    state: getStateName(state, swapType),
     stateNumber: state,
     canRefund,
     canClaim,
@@ -179,7 +186,7 @@ export async function submitCommitTransactions(req: Request, res: Response): Pro
   // We just wait for the SDK to detect it.
 
   try {
-    if (typeof (swap as any).waitTillCommited === 'function') {
+    if ('waitTillCommited' in swap && typeof (swap as any).waitTillCommited === 'function') {
       await (swap as any).waitTillCommited();
     }
 
@@ -191,7 +198,7 @@ export async function submitCommitTransactions(req: Request, res: Response): Pro
       success: true,
       message: 'Commit detected on-chain',
       swapId: id,
-      state,
+      state: getStateName(state, swapType),
       stateNumber: state,
     });
   } catch (error: any) {
