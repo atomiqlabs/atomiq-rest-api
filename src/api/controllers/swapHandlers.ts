@@ -3,7 +3,6 @@ import { swapper } from '../../services';
 import { SwapAmountType, FeeType, SwapType, IEscrowSelfInitSwap } from '@atomiqlabs/sdk-lib';
 import {
   QuoteRequest,
-  SwapListResponse,
 } from '../../types/api';
 import { tokenAmountToJSON } from '../../utils/sdkHelpers';
 import {
@@ -258,11 +257,17 @@ export async function submitCommitTransactions(req: Request, res: Response): Pro
       await (swap as any).waitTillCommited();
     }
 
+    // Get updated state after commit
+    const state = swap.getState();
+    const swapType = swap.getType();
+
     res.json({
       success: true,
       message: 'Commit detected on-chain',
-      txIds: (swap as any).getTxIds() || [],
-      state: 'COMMITED',
+      swapId: id,
+      state: getStateText(state, swapType),
+      stateNumber: state,
+      stateText: getStateDescription(state, swapType),
     });
   } catch (error: any) {
     res.status(500).json({
