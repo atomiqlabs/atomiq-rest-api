@@ -17,7 +17,7 @@ export type TransactionType =
 export interface UnsignedTransactionWithMetadata {
   chain: string;
   txType: TransactionType;
-  swapType: SwapType;
+  description?: string;
   data: any;
 }
 

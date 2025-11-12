@@ -73,7 +73,7 @@ async function testCommitFlow() {
     const quoteRequest: QuoteRequest = {
       srcToken: 'STARKNET-STRK',
       dstToken: 'BTC',
-      amount: '10',
+      amount: '100',
       amountType: 'EXACT_IN',
       srcAddress: starknetWallet.address,
       dstAddress: BTC_TEST_ADDRESS,
@@ -99,6 +99,9 @@ async function testCommitFlow() {
 
     for (let i = 0; i < unsignedTxs.length; i++) {
       const unsignedTx = unsignedTxs[i];
+      if (unsignedTx.description) {
+        console.log(`   Description: ${unsignedTx.description}`);
+      }
       console.log(`\n   Transaction ${i + 1}/${unsignedTxs.length}:`);
       console.log(`   Chain: ${unsignedTx.chain}`);
       console.log(`   Type: ${unsignedTx.txType}`);

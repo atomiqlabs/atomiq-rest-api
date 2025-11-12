@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { swapper } from '../../services';
 import {
-  ISwap,
   IEscrowSelfInitSwap,
   SwapAmountType,
   FeeType,
@@ -95,6 +94,8 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     SwapType.TO_BTCLN,            // 3: SC -> BTC Lightning
     SwapType.FROM_BTC,            // 0: BTC -> SC
   ];
+  
+
 
   if (swapTypesWithCommit.includes(swapType) && swap instanceof IEscrowSelfInitSwap) {
     const commitTxs = await swap.txsCommit();
