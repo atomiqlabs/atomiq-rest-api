@@ -147,8 +147,10 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
  */
 export async function getSwapState(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
+  
 
   const swap = await swapper.getSwapById(id);
+  await swap._sync(true);
   const state = swap.getState();
   const swapType = swap.getType();
 
@@ -162,14 +164,16 @@ export async function getSwapState(req: Request, res: Response): Promise<void> {
   res.json({
     swapId: swap.getId(),
     state: getStateName(state, swapType),
-    stateNumber: state,
     canRefund,
     canClaim,
-    needsClientAction: canRefund || canClaim,
     swap: swap.serialize(),
   });
 }
 
+
+
+// TODO: this should sent a signed tx to the RPC for the client
+// shouldn't wait for until committed, really just send the tx
 /**
  * GET /api/v1/swaps/:id/commit
  * Trigger SDK watchdog to detect on-chain commit

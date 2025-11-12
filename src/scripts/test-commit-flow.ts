@@ -145,37 +145,21 @@ async function testCommitFlow() {
       }
     }
 
-    // Step 4: Trigger SDK watchdog to detect commit
-    console.log('\n📤 Step 4: Triggering SDK watchdog to detect commit...');
-    const commitResponse: any = await apiRequest(`/swaps/${swapId}/commit`);
-
-    console.log('✅ Middleware notified');
-    console.log(`   Message: ${commitResponse.message}`);
-    console.log(`   State: ${commitResponse.state}`);
-
     // Step 5: Poll swap state
     console.log('\n👀 Step 5: Polling swap state...');
-    let currentState = commitResponse.state;
+    let currentState = 'CREATED';
     let pollCount = 0;
-    const maxPolls = 20;
 
-    while (currentState !== 'CLAIMED' && currentState !== 'REFUNDABLE' && pollCount < maxPolls) {
+    while (currentState !== 'CLAIMED' && currentState !== 'REFUNDABLE') {
       await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
       pollCount++;
 
       const stateResponse: any = await apiRequest(`/swaps/${swapId}`);
       currentState = stateResponse.state;
 
-      console.log(`   Poll ${pollCount}: ${currentState} (${stateResponse.stateNumber})`);
-      console.log(`   ${stateResponse.stateText}`);
+      console.log(`   Poll ${pollCount}: ${currentState}`);
       console.log(`   Can Refund: ${stateResponse.canRefund}`);
       console.log(`   Can Claim: ${stateResponse.canClaim}`);
-      console.log(`   Needs Action: ${stateResponse.needsClientAction}`);
-
-      if (stateResponse.needsClientAction) {
-        console.log('   ⚠️  User action required!');
-        break;
-      }
     }
 
     if (currentState === 'CLAIMED') {
@@ -184,7 +168,6 @@ async function testCommitFlow() {
       console.log('\n⚠️  Swap is refundable - LP did not complete payment');
     } else {
       console.log(`\n⏱️  Test ended with state: ${currentState}`);
-      console.log('   Note: In production, continue polling until final state');
     }
 
   } catch (error: any) {
