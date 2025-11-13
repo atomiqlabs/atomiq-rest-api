@@ -128,7 +128,14 @@ async function testCommitFlow() {
         
         txData.details.nonce = await starknetWallet.getNonce();
         console.log(txData)
-        signedTxs.push(await starknetWallet.buildInvocation(txData.tx, txData.details));
+
+        // Build the invocation and preserve the type field for the API
+        const signed = await starknetWallet.buildInvocation(txData.tx, txData.details);
+        signedTxs.push({
+          type: txData.type,      // Preserve transaction type (INVOKE or DEPLOY_ACCOUNT)
+          signed: signed,          // The signed invocation
+          details: txData.details  // Transaction details with nonce
+        });
 
         console.log(`   ✅ Transaction signed`);
       }

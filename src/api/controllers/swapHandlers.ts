@@ -207,6 +207,8 @@ export async function submitCommitTransactions(req: Request, res: Response): Pro
     // Process each signed transaction
     for (const data of commitRequest.signedTxs) {
       
+      console.log(data)
+      
       if (swap.chainIdentifier === 'STARKNET') {
         // Convert string values back to BigInt for Starknet library
         if (data.details && data.details.resourceBounds) {
@@ -227,15 +229,8 @@ export async function submitCommitTransactions(req: Request, res: Response): Pro
 
         // Broadcast transaction based on type
         let txHash: string;
-        if (data.type === 'INVOKE') {
-          const result: any = await starknetRpc.invokeFunction(data.signed, data.details);
-          txHash = result.transaction_hash;
-        } else if (data.type === 'DEPLOY_ACCOUNT') {
-          const result: any = await starknetRpc.deployAccountContract(data.signed, data.details);
-          txHash = result.transaction_hash;
-        } else {
-          throw new Error(`Unsupported transaction type: ${data.type}`);
-        }
+        const result: any = await starknetRpc.invokeFunction(data.signed, data.details);
+        txHash = result.transaction_hash;
 
         txHashes.push(txHash);
       } else if (swap.chainIdentifier === 'SOLANA') {
