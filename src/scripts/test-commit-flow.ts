@@ -93,7 +93,6 @@ async function testCommitFlow() {
 
     // Step 3: Sign and broadcast transactions
     console.log('\n✍️  Step 3: Signing and broadcasting transactions...');
-    const txHashes: string[] = [];
 
     for (let i = 0; i < unsignedActions.length; i++) {
       const unsignedAction = unsignedActions[i];
@@ -127,7 +126,6 @@ async function testCommitFlow() {
         }
         
         txData.details.nonce = await starknetWallet.getNonce();
-        console.log(txData)
 
         // Build the invocation and preserve the type field for the API
         const signed = await starknetWallet.buildInvocation(txData.tx, txData.details);
@@ -151,7 +149,6 @@ async function testCommitFlow() {
 
       console.log(`✅ Transactions broadcast successfully`);
       console.log(`   Transaction hashes: ${commitResponse.txHashes.join(', ')}`);
-      
     }
 
     // Step 5: Poll swap state

@@ -169,15 +169,9 @@ export async function getSwapState(req: Request, res: Response): Promise<void> {
 }
 
 
-
-// TODO: this should sent a signed tx to the RPC for the client
-// shouldn't wait for until committed, really just send the tx
 /**
- * GET /api/v1/swaps/:id/commit
- * Trigger SDK watchdog to detect on-chain commit
- *
- * Note: Client broadcasts transactions directly to blockchain first.
- * This endpoint triggers the SDK watchdog to poll and detect the commit.
+ * POST /api/v1/swaps/:id/commit
+ * Submit signed transactions to the blockchain
  */
 export async function submitCommitTransactions(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
