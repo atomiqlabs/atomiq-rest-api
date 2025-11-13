@@ -71,8 +71,8 @@ async function testCommitFlow() {
     const quoteRequest: QuoteRequest = {
       srcToken: 'STARKNET-STRK',
       dstToken: 'BTC',
-      amount: '100',
-      amountType: 'EXACT_IN',
+      amount: '0.00001',
+      amountType: 'EXACT_OUT',
       srcAddress: starknetWallet.address,
       dstAddress: BTC_TEST_ADDRESS,
     };
