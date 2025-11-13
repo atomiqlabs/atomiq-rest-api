@@ -32,20 +32,22 @@ const txDescriptions: {[swapType in SwapType]?: Record<TransactionType, string>}
  */
 export function wrapTransactionsWithMetadata(
   txs: any[],
+  swapId: string,
   txType: TransactionType,
   chain: string,
   swapType: SwapType,
-): UnsignedTransactionWithMetadata[] {
+): UnsignedTransactionWithMetadata {
   if (!txs || txs.length === 0) {
-    return [];
+    throw Error('Should have txs in the wrapTransactionsWithMetadata')
   }
 
   const txDescription = txDescriptions[swapType]?.[txType];
   
-  return txs.map((tx) => ({
+  return {
     chain,
     txType,
+    endpoint: `/swaps/${swapId}/${txType}`,
     description: txDescription,
-    data: serializeTransaction(tx),
-  }));
+    data: txs.map((tx) => (serializeTransaction(tx))),
+  };
 }

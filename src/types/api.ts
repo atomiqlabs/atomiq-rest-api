@@ -17,8 +17,9 @@ export type TransactionType =
 export interface UnsignedTransactionWithMetadata {
   chain: string;
   txType: TransactionType;
+  endpoint: string,
   description?: string;
-  data: any;
+  data: any[];
 }
 
 /**

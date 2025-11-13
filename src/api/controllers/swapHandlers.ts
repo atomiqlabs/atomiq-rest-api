@@ -12,6 +12,7 @@ import {
 import { tokenAmountToJSON } from '../../utils/sdkHelpers';
 import { wrapTransactionsWithMetadata } from '../../utils/transactionHelpers';
 import { getStateName } from '../../utils/stateHelpers';
+import { starknetRpc } from '../../services/SdkService';
 
 /**
  * POST /api/v1/quotes
@@ -87,7 +88,7 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
   const chain = swap.chainIdentifier;
 
   // Get unsigned commit transactions only for swap types that require them
-  let unsignedTxs: ReturnType<typeof wrapTransactionsWithMetadata> = [];
+  let unsignedTxs = [];
   const swapType = swap.getType();
   const swapTypesWithCommit = [
     SwapType.TO_BTC,              // 2: SC -> BTC on-chain
@@ -95,11 +96,9 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     SwapType.FROM_BTC,            // 0: BTC -> SC
   ];
   
-
-
   if (swapTypesWithCommit.includes(swapType) && swap instanceof IEscrowSelfInitSwap) {
     const commitTxs = await swap.txsCommit();
-    unsignedTxs = wrapTransactionsWithMetadata(commitTxs, 'commit', chain, swapType);
+    unsignedTxs.push(wrapTransactionsWithMetadata(commitTxs, swap.getId(), 'commit', chain, swapType));
   }
 
   // Extract quote data directly from SDK objects
@@ -148,7 +147,6 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
 export async function getSwapState(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   
-
   const swap = await swapper.getSwapById(id);
   await swap._sync(true);
   const state = swap.getState();
@@ -183,35 +181,83 @@ export async function getSwapState(req: Request, res: Response): Promise<void> {
  */
 export async function submitCommitTransactions(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
+  const commitRequest = req.body;
 
-  const swap = await swapper.getSwapById(id);
+  // Validate request body
+  if (!commitRequest.signedTxs || !Array.isArray(commitRequest.signedTxs)) {
+    res.status(400).json({
+      error: 'ValidationError',
+      message: 'signedTxs array is required in request body',
+    });
+    return;
+  }
 
-  // Client has already broadcast transactions to the blockchain.
-  // SDK watchdog will detect the on-chain commit automatically via polling.
-  // We just wait for the SDK to detect it.
+  if (commitRequest.signedTxs.length === 0) {
+    res.status(400).json({
+      error: 'ValidationError',
+      message: 'At least one signed transaction is required',
+    });
+    return;
+  }
 
   try {
-    if ('waitTillCommited' in swap && typeof (swap as any).waitTillCommited === 'function') {
-      await (swap as any).waitTillCommited();
+    const swap = await swapper.getSwapById(id);
+    const txHashes: string[] = [];
+
+    // Process each signed transaction
+    for (const data of commitRequest.signedTxs) {
+      
+      if (swap.chainIdentifier === 'STARKNET') {
+        // Convert string values back to BigInt for Starknet library
+        if (data.details && data.details.resourceBounds) {
+          const rb = data.details.resourceBounds;
+          if (rb.l1_gas) {
+            rb.l1_gas.max_amount = BigInt(rb.l1_gas.max_amount);
+            rb.l1_gas.max_price_per_unit = BigInt(rb.l1_gas.max_price_per_unit);
+          }
+          if (rb.l2_gas) {
+            rb.l2_gas.max_amount = BigInt(rb.l2_gas.max_amount);
+            rb.l2_gas.max_price_per_unit = BigInt(rb.l2_gas.max_price_per_unit);
+          }
+          if (rb.l1_data_gas) {
+            rb.l1_data_gas.max_amount = BigInt(rb.l1_data_gas.max_amount);
+            rb.l1_data_gas.max_price_per_unit = BigInt(rb.l1_data_gas.max_price_per_unit);
+          }
+        }
+
+        // Broadcast transaction based on type
+        let txHash: string;
+        if (data.type === 'INVOKE') {
+          const result: any = await starknetRpc.invokeFunction(data.signed, data.details);
+          txHash = result.transaction_hash;
+        } else if (data.type === 'DEPLOY_ACCOUNT') {
+          const result: any = await starknetRpc.deployAccountContract(data.signed, data.details);
+          txHash = result.transaction_hash;
+        } else {
+          throw new Error(`Unsupported transaction type: ${data.type}`);
+        }
+
+        txHashes.push(txHash);
+      } else if (swap.chainIdentifier === 'SOLANA') {
+        // TODO: Implement Solana transaction broadcasting when Solana support is added
+        throw new Error('Solana transaction broadcasting not yet implemented');
+      } else {
+        throw new Error(`Unsupported chain: ${swap.chainIdentifier}`);
+      }
     }
-
-    // Get updated state after commit
-    const state = swap.getState();
-    const swapType = swap.getType();
-
+    
     res.json({
       success: true,
-      message: 'Commit detected on-chain',
-      swapId: id,
-      state: getStateName(state, swapType),
-      stateNumber: state,
+      message: 'Transactions broadcast successfully',
+      txHashes,
     });
   } catch (error: any) {
     res.status(500).json({
-      error: 'CommitError',
-      message: error.message || 'Failed to detect commit on-chain',
+      error: 'BroadcastError',
+      message: error.message || 'Failed to broadcast transactions',
     });
-  }
+  }  
+  
 }
 
 

@@ -18,7 +18,7 @@ const Factory = new SwapperFactory<[StarknetInitializerType]>([
 // console.log('[SdkService] Tokens:', Tokens);
 
 // Initialize RPC connection
-const starknetRpc = new RpcProvider({ nodeUrl: config.chains.starknetRpc });
+export const starknetRpc = new RpcProvider({ nodeUrl: config.chains.starknetRpc });
 
 // Determine Bitcoin network based on config
 const bitcoinNetwork = BitcoinNetwork[config.sdk.network];

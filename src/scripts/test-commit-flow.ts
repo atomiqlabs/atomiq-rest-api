@@ -65,8 +65,6 @@ async function testCommitFlow() {
   console.log(`  Starknet Address: ${starknetWallet.address}`);
   console.log(`  Bitcoin Address: ${BTC_TEST_ADDRESS}\n`);
 
-
-  
   try {
     // Step 1: Create quote
     console.log('📝 Step 1: Creating quote...');
@@ -91,58 +89,62 @@ async function testCommitFlow() {
     console.log(`   Unsigned transactions: ${quoteResponse.unsignedTxs.length}`);
 
     const swapId = quoteResponse.swapId;
-    const unsignedTxs = quoteResponse.unsignedTxs;
+    const unsignedActions = quoteResponse.unsignedTxs;
 
     // Step 3: Sign and broadcast transactions
     console.log('\n✍️  Step 3: Signing and broadcasting transactions...');
     const txHashes: string[] = [];
 
-    for (let i = 0; i < unsignedTxs.length; i++) {
-      const unsignedTx = unsignedTxs[i];
-      if (unsignedTx.description) {
-        console.log(`   Description: ${unsignedTx.description}`);
+    for (let i = 0; i < unsignedActions.length; i++) {
+      const unsignedAction = unsignedActions[i];
+      if (unsignedAction.description) {
+        console.log(`   Description: ${unsignedAction.description}`);
       }
-      console.log(`\n   Transaction ${i + 1}/${unsignedTxs.length}:`);
-      console.log(`   Chain: ${unsignedTx.chain}`);
-      console.log(`   Type: ${unsignedTx.txType}`);
+      console.log(`\n   Transaction ${i + 1}/${unsignedActions.length}:`);
+      console.log(`   Chain: ${unsignedAction.chain}`);
+      console.log(`   Type: ${unsignedAction.txType}`);
 
-      const txData = unsignedTx.data;
+      let signedTxs: any[] = [];
+      for (const txData of unsignedAction.data) {
+        
+        // Convert string values back to BigInt for Starknet library
+        // The middleware serializes BigInt to string for JSON transport,
+        // but starknet.js expects BigInt values
+        if (txData.details && txData.details.resourceBounds) {
+          const rb = txData.details.resourceBounds;
+          if (rb.l1_gas) {
+            rb.l1_gas.max_amount = BigInt(rb.l1_gas.max_amount);
+            rb.l1_gas.max_price_per_unit = BigInt(rb.l1_gas.max_price_per_unit);
+          }
+          if (rb.l2_gas) {
+            rb.l2_gas.max_amount = BigInt(rb.l2_gas.max_amount);
+            rb.l2_gas.max_price_per_unit = BigInt(rb.l2_gas.max_price_per_unit);
+          }
+          if (rb.l1_data_gas) {
+            rb.l1_data_gas.max_amount = BigInt(rb.l1_data_gas.max_amount);
+            rb.l1_data_gas.max_price_per_unit = BigInt(rb.l1_data_gas.max_price_per_unit);
+          }
+        }
+        
+        txData.details.nonce = await starknetWallet.getNonce();
+        console.log(txData)
+        signedTxs.push(await starknetWallet.buildInvocation(txData.tx, txData.details));
 
-      // Convert string values back to BigInt for Starknet library
-      // The middleware serializes BigInt to string for JSON transport,
-      // but starknet.js expects BigInt values
-      if (txData.details && txData.details.resourceBounds) {
-        const rb = txData.details.resourceBounds;
-        if (rb.l1_gas) {
-          rb.l1_gas.max_amount = BigInt(rb.l1_gas.max_amount);
-          rb.l1_gas.max_price_per_unit = BigInt(rb.l1_gas.max_price_per_unit);
-        }
-        if (rb.l2_gas) {
-          rb.l2_gas.max_amount = BigInt(rb.l2_gas.max_amount);
-          rb.l2_gas.max_price_per_unit = BigInt(rb.l2_gas.max_price_per_unit);
-        }
-        if (rb.l1_data_gas) {
-          rb.l1_data_gas.max_amount = BigInt(rb.l1_data_gas.max_amount);
-          rb.l1_data_gas.max_price_per_unit = BigInt(rb.l1_data_gas.max_price_per_unit);
-        }
+        console.log(`   ✅ Transaction signed`);
       }
-      if (txData.details && txData.details.tip) {
-        txData.details.tip = BigInt(txData.details.tip);
-      }
+    
+      // Step 4: Send signed transactions to API for broadcasting
+      console.log('\n📤 Step 4: Sending signed transactions to API for broadcasting...');
+      const commitResponse: any = await apiRequest(unsignedAction.endpoint, {
+        method: 'POST',
+        body: JSON.stringify({ signedTxs }, (_, value) =>
+          typeof value === 'bigint' ? value.toString() : value
+        ),
+      });
 
-      if (txData.type === 'INVOKE') {
-        console.log(`   Executing INVOKE with ${txData.tx.length} calls...`);
-        const result = await starknetWallet.execute(txData.tx, txData.details);
-        txHashes.push(result.transaction_hash);
-        console.log(`   ✅ Transaction hash: ${result.transaction_hash}`);
-      } else if (txData.type === 'DEPLOY_ACCOUNT') {
-        console.log(`   Deploying account...`);
-        const result = await starknetWallet.deployAccount(txData.tx, txData.details);
-        txHashes.push(result.transaction_hash);
-        console.log(`   ✅ Transaction hash: ${result.transaction_hash}`);
-      } else {
-        console.log(`   ⚠️  Unknown transaction type: ${txData.type}`);
-      }
+      console.log(`✅ Transactions broadcast successfully`);
+      console.log(`   Transaction hashes: ${commitResponse.txHashes.join(', ')}`);
+      
     }
 
     // Step 5: Poll swap state
