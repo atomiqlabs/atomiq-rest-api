@@ -87,6 +87,8 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
 
   const chain = swap.chainIdentifier;
 
+  // TODO: separate this part into a separate function, make it more general to handle all types of swaps, 
+  // return an array of unsigned transactions with metadata accordingly
   // Get unsigned commit transactions only for swap types that require them
   let unsignedTxs = [];
   const swapType = swap.getType();
@@ -100,7 +102,8 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     const commitTxs = await swap.txsCommit();
     unsignedTxs.push(wrapTransactionsWithMetadata(commitTxs, swap.getId(), 'commit', chain, swapType));
   }
-
+  // TODO until here
+  
   // Extract quote data directly from SDK objects
   const priceInfo = swap.getPriceInfo();
 
@@ -193,9 +196,21 @@ export async function submitCommitTransactions(req: Request, res: Response): Pro
     });
     return;
   }
+  
+
 
   try {
     const swap = await swapper.getSwapById(id);
+    
+    // TODO validate that the swap is in the correct state for commit, use swap.canCommit() function
+    // if (!swap.isCommitable()) {
+    //   res.status(400).json({
+    //     error: 'ValidationError',
+    //     message: 'Swap is not in the correct state for commit',
+    //   });
+    //   return;
+    // }
+    
     const txHashes: string[] = [];
 
     // Process each signed transaction

@@ -15,6 +15,8 @@ export function getStateName(stateNumber: number, swapType: SwapType): string {
   switch (swapType) {
     case SwapType.TO_BTC:
       return ToBTCSwapState[stateNumber];
+      
+      // TODO: add other swap types here
 
     // Future swap types can be added here
     default:

@@ -5,7 +5,7 @@ New Directory Structure Proposal
  │   ├── index.ts                    # Entry point (minimal logic)
  │   ├── App.ts                      # Express app setup (like Runner)
  │   ├── AppWrapper.ts               # API routes & middleware (like RunnerWrapper)
- │   ├── chains/                     # Multi-chain support (registry pattern)
+ │   ├── chains/                     # Multi-chain support (registry pattern) >flatten
  │   │   ├── ChainRegistry.ts        # Chain registration & types
  │   │   ├── starknet/
  │   │   │   ├── StarknetHandler.ts  # Starknet transaction handling
@@ -14,7 +14,7 @@ New Directory Structure Proposal
  │   │       ├── SolanaHandler.ts    # Solana transaction handling (TODO)
  │   │       └── SolanaTypes.ts      # Solana-specific types
  │   ├── swaps/                       # Swap type handlers (extensible)
- │   │   ├── SwapRegistry.ts         # Swap type registration
+ │   │   ├── SwapRegistry.ts         # Swap type registration >xxx
  │   │   ├── ToBtcOnchain.ts         # BTC on-chain swaps (TODO)
  │   │   ├── FromBtcOnchain.ts       # From BTC on-chain (TODO)
  │   │   ├── ToBtcLightning.ts       # Lightning swaps (TODO)
