@@ -3,10 +3,10 @@
  *
  * This script demonstrates:
  * 1. Creating a Starknet STRK → Lightning Network swap using SDK
- * 2. Using a short-expiration Lightning invoice (30 seconds)
- * 3. Waiting for invoice to expire before committing
+ * 2. Using a Lightning invoice with inbound liquidity
+ * 3. Manually canceling the invoice in Electrum after getting quote
  * 4. Committing the swap on-chain (paying STRK)
- * 5. LP attempts to pay expired invoice and fails
+ * 5. LP attempts to pay canceled invoice and fails
  * 6. Executing cooperative refund with LP-provided signature
  */
 
@@ -77,7 +77,7 @@ async function main() {
     console.log('1. Open Electrum wallet on testnet');
     console.log('2. Go to Receive tab');
     console.log('3. Enter an amount (e.g., 3000 sats)');
-    console.log('4. Set expiration to 30 seconds');
+    console.log('4. Set expiration to any value you want');
     console.log('5. Click "Create Request"');
     console.log('6. Copy the Lightning invoice (starts with "lntb")\n');
 
@@ -114,17 +114,16 @@ async function main() {
     console.log(`   Output: ${swap.getOutput()} sats (to Lightning)`);
     console.log(`   Quote expiry: ${swap.getQuoteExpiry()} (in ${(swap.getQuoteExpiry()-Date.now())/1000} seconds)`);
 
-    // Step 3: Wait for invoice to expire
-    console.log('\n⏳ Step 3: Waiting for Lightning invoice to expire...');
+    // Step 3: Delete the invoice in Electrum
+    console.log('\n⏳ Step 3: Delete the invoice in Electrum');
     console.log('   This will cause the LP payment to fail, triggering a refund scenario\n');
 
-    // Wait 35 seconds to ensure invoice has expired (30 second expiry + 5 second buffer)
-    const waitSeconds = 35;
+    const waitSeconds = 20;
     for (let i = waitSeconds; i > 0; i--) {
         process.stdout.write(`\r   Countdown: ${i} seconds remaining...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    console.log('\r   ✅ Invoice should now be expired\n');
+    console.log('\r   ✅ Invoice should now be deleted\n');
 
     // Step 4: Commit the swap on-chain (pay STRK)
     console.log('📝 Step 4: Committing swap on-chain...');
@@ -139,7 +138,6 @@ async function main() {
     }
 
     // Get commit transactions and execute them manually
-    // @ts-ignore - accessing internal property for low-level control
     const commitTxs = await swap.txsCommit(true);
     let commitTxId = '';
 
@@ -154,12 +152,12 @@ async function main() {
             console.log(`   ✅ Deploy account confirmed: ${result.transaction_hash}`);
         }
     }
-
+    await swap.waitTillCommited();
     console.log(`✅ Swap committed! Transaction: ${commitTxId}\n`);
 
     // Step 5: Wait for LP to attempt payment (and fail)
-    console.log('⏳ Step 5: Waiting for LP to attempt paying the expired invoice...');
-    console.log('   The LP will try to pay but fail due to expired invoice\n');
+    console.log('⏳ Step 5: Waiting for LP to attempt paying the deleted invoice...');
+    console.log('   The LP will try to pay but fail due to deleted invoice\n');
 
     // Add listener for swap state changes
     swap.events.on("swapState", (swap) => {
@@ -171,16 +169,15 @@ async function main() {
 
     if (paymentSuccess) {
         console.log('⚠️  Warning: Payment succeeded unexpectedly!');
-        console.log('   The invoice might not have been expired.');
+        console.log('   The invoice might not have been deleted.');
         await swapper.stop();
         return;
     }
 
-    console.log('✅ LP payment failed as expected (invoice expired)\n');
+    console.log('✅ LP payment failed as expected (invoice deleted)\n');
 
     // Step 6: Check if swap is refundable
     console.log('🔍 Step 6: Checking refund eligibility...');
-    // @ts-ignore - Type definitions may not be complete for TO_BTCLN swaps
     if (!swap.isRefundable || !swap.isRefundable()) {
         console.log('⚠️  Proceeding with refund attempt...');
         console.log(`   Current state: ${swap.getState()}`);
@@ -193,7 +190,6 @@ async function main() {
     console.log('   LP will provide refund authorization signature automatically');
 
     try {
-        // @ts-ignore - Type definitions may not be complete for TO_BTCLN swaps
         await swap.refund(starknetWallet);
         console.log('✅ Refund transaction submitted and confirmed!\n');
     } catch (error) {
@@ -209,7 +205,7 @@ async function main() {
     console.log('\n🎉 SUCCESS! Cooperative refund completed!');
     console.log('\nWhat happened:');
     console.log('✅ You paid STRK tokens on-chain');
-    console.log('✅ LP attempted to pay Lightning invoice but failed (expired)');
+    console.log('✅ LP attempted to pay Lightning invoice but failed (deleted)');
     console.log('✅ LP signed cooperative refund authorization');
     console.log('✅ Your STRK tokens were refunded on-chain');
     console.log('✅ No penalties - you got your funds back!');
