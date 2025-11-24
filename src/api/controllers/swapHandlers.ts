@@ -30,23 +30,6 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Validate amount fields - exactly one must be provided
-  if (quoteRequest.amount && quoteRequest.rawAmount) {
-    res.status(400).json({
-      error: 'ValidationError',
-      message: 'Cannot specify both amount and rawAmount - provide exactly one',
-    });
-    return;
-  }
-
-  if (!quoteRequest.amount && !quoteRequest.rawAmount) {
-    res.status(400).json({
-      error: 'ValidationError',
-      message: 'Must specify either amount (decimal) or rawAmount (base units)',
-    });
-    return;
-  }
-
   if (!quoteRequest.amountType) {
     res.status(400).json({
       error: 'ValidationError',
@@ -63,6 +46,34 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  // Detect Lightning Network swaps (amount determined by invoice)
+  const isLightningSwap =
+    quoteRequest.dstToken === 'BTC-LN' ||
+    quoteRequest.dstToken === 'BTCLN';
+  const isExactOut = quoteRequest.amountType === 'EXACT_OUT';
+
+  // Validate amount fields
+  if (quoteRequest.amount && quoteRequest.rawAmount) {
+    res.status(400).json({
+      error: 'ValidationError',
+      message: 'Cannot specify both amount and rawAmount - provide exactly one',
+    });
+    return;
+  }
+
+  // For Lightning swaps with EXACT_OUT, amount is optional (determined by invoice)
+  // For all other swaps, amount is required
+  if (!isLightningSwap || !isExactOut) {
+    if (!quoteRequest.amount && !quoteRequest.rawAmount) {
+      res.status(400).json({
+        error: 'ValidationError',
+        message: 'Must specify either amount (decimal) or rawAmount (base units)',
+      });
+      return;
+    }
+  }
+  
+
   // Determine amount type
   const amountType = quoteRequest.amountType === 'EXACT_IN'
     ? SwapAmountType.EXACT_IN
@@ -71,15 +82,18 @@ export async function createQuote(req: Request, res: Response): Promise<void> {
   // Convert amount based on format
   // - If rawAmount provided: convert string to BigInt
   // - If amount provided: pass decimal string as-is
-  const amountForSDK: string | bigint = quoteRequest.rawAmount
+  // - If neither provided (Lightning invoice): pass null (cast as any for SDK compatibility)
+  const amountForSDK: string | bigint | null = quoteRequest.rawAmount
     ? BigInt(quoteRequest.rawAmount)
-    : quoteRequest.amount!;
+    : quoteRequest.amount
+    ? quoteRequest.amount
+    : null;
 
   // Create swap via SDK - SDK stores it automatically
   const swap = await swapper.swap(
     quoteRequest.srcToken,
     quoteRequest.dstToken,
-    amountForSDK,
+    amountForSDK as any,  // Cast to any for Lightning invoice swaps (SDK accepts null at runtime)
     amountType,
     quoteRequest.srcAddress,
     quoteRequest.dstAddress

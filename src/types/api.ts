@@ -28,8 +28,8 @@ export interface UnsignedTransactionWithMetadata {
 export interface QuoteRequest {
   srcToken: string;
   dstToken: string;
-  amount?: string;        // Decimal format: "1.5"
-  rawAmount?: string;     // Raw base units: "1500000000000000000"
+  amount?: string | null;        // Decimal format: "1.5" (optional for Lightning invoices)
+  rawAmount?: string | null;     // Raw base units: "1500000000000000000" (optional for Lightning invoices)
   amountType: 'EXACT_IN' | 'EXACT_OUT';
   srcAddress: string;
   dstAddress: string;

@@ -165,7 +165,7 @@ async function testRefundFlow() {
     const quoteRequest: QuoteRequest = {
       srcToken: 'STARKNET-STRK',
       dstToken: 'BTC-LN',
-      amount: '',  // Will be determined by invoice
+      amount: null as any,  // Will be determined by invoice
       amountType: 'EXACT_OUT',  // EXACT_OUT required for TO_BTCLN
       srcAddress: starknetWallet.address,
       dstAddress: lightningInvoice,
