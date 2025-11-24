@@ -260,9 +260,162 @@ export async function submitCommitTransactions(req: Request, res: Response): Pro
       error: 'BroadcastError',
       message: error.message || 'Failed to broadcast transactions',
     });
-  }  
-  
+  }
+
 }
 
+/**
+ * GET /api/v1/swaps/:id/txs/refund
+ * Get unsigned refund transactions for a swap
+ */
+export async function getRefundTransactions(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+
+  try {
+    const swap = await swapper.getSwapById(id);
+
+    // Sync swap state with blockchain
+    await swap._sync(true);
+
+    const swapType = swap.getType();
+
+    // Check if swap is refundable
+    const canRefund = 'isRefundable' in swap && typeof swap.isRefundable === 'function'
+      ? swap.isRefundable()
+      : false;
+
+    if (!canRefund) {
+      res.status(400).json({
+        error: 'NotRefundable',
+        message: 'Swap is not in a refundable state',
+        currentState: getStateName(swap.getState(), swapType),
+      });
+      return;
+    }
+
+    // Check if swap has txsRefund method
+    if (!('txsRefund' in swap) || typeof (swap as any).txsRefund !== 'function') {
+      res.status(400).json({
+        error: 'NotSupported',
+        message: 'This swap type does not support refund transactions',
+      });
+      return;
+    }
+
+    // Get unsigned refund transactions from SDK
+    const refundTxs = await (swap as any).txsRefund();
+    const chain = swap.chainIdentifier;
+
+    // Wrap transactions with metadata
+    const unsignedTxs = wrapTransactionsWithMetadata(refundTxs, swap.getId(), 'refund', chain, swapType);
+
+    res.json({
+      swapId: swap.getId(),
+      state: getStateName(swap.getState(), swapType),
+      unsignedTxs,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'RefundError',
+      message: error.message || 'Failed to get refund transactions',
+    });
+  }
+}
+
+/**
+ * POST /api/v1/swaps/:id/refund
+ * Submit signed refund transactions to the blockchain
+ */
+export async function submitRefundTransactions(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+  const refundRequest = req.body;
+
+  // Validate request body
+  if (!refundRequest.signedTxs || !Array.isArray(refundRequest.signedTxs)) {
+    res.status(400).json({
+      error: 'ValidationError',
+      message: 'signedTxs array is required in request body',
+    });
+    return;
+  }
+
+  if (refundRequest.signedTxs.length === 0) {
+    res.status(400).json({
+      error: 'ValidationError',
+      message: 'At least one signed transaction is required',
+    });
+    return;
+  }
+
+  try {
+    const swap = await swapper.getSwapById(id);
+
+    // Sync swap state
+    await swap._sync(true);
+
+    // Check if swap is refundable
+    const canRefund = 'isRefundable' in swap && typeof swap.isRefundable === 'function'
+      ? swap.isRefundable()
+      : false;
+
+    if (!canRefund) {
+      res.status(400).json({
+        error: 'NotRefundable',
+        message: 'Swap is not in a refundable state',
+      });
+      return;
+    }
+
+    const txHashes: string[] = [];
+
+    // Process each signed transaction
+    for (const data of refundRequest.signedTxs) {
+
+      console.log(data);
+
+      if (swap.chainIdentifier === 'STARKNET') {
+        // Convert string values back to BigInt for Starknet library
+        if (data.details && data.details.resourceBounds) {
+          const rb = data.details.resourceBounds;
+          if (rb.l1_gas) {
+            rb.l1_gas.max_amount = BigInt(rb.l1_gas.max_amount);
+            rb.l1_gas.max_price_per_unit = BigInt(rb.l1_gas.max_price_per_unit);
+          }
+          if (rb.l2_gas) {
+            rb.l2_gas.max_amount = BigInt(rb.l2_gas.max_amount);
+            rb.l2_gas.max_price_per_unit = BigInt(rb.l2_gas.max_price_per_unit);
+          }
+          if (rb.l1_data_gas) {
+            rb.l1_data_gas.max_amount = BigInt(rb.l1_data_gas.max_amount);
+            rb.l1_data_gas.max_price_per_unit = BigInt(rb.l1_data_gas.max_price_per_unit);
+          }
+        }
+
+        // Broadcast transaction
+        let txHash: string;
+        const result: any = await starknetRpc.invokeFunction(data.signed, data.details);
+        txHash = result.transaction_hash;
+
+        txHashes.push(txHash);
+      } else if (swap.chainIdentifier === 'SOLANA') {
+        // TODO: Implement Solana transaction broadcasting when Solana support is added
+        throw new Error('Solana transaction broadcasting not yet implemented');
+      } else {
+        throw new Error(`Unsupported chain: ${swap.chainIdentifier}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Refund transactions broadcast successfully',
+      txHashes,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'RefundBroadcastError',
+      message: error.message || 'Failed to broadcast refund transactions',
+    });
+  }
+}
 
 

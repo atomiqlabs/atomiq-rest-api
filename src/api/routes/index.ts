@@ -5,8 +5,8 @@ import {
   // listSwaps,
   // getCommitTransactions,
   submitCommitTransactions,
-  // getRefundTransactions,
-  // submitRefundTransactions,
+  getRefundTransactions,
+  submitRefundTransactions,
   // getClaimTransactions,
   getHealth,
   getLimits,
@@ -35,8 +35,8 @@ export function createRouter(): Router {
   // router.get('/swaps/:id/txs/commit', asyncHandler(getCommitTransactions));
   router.post('/swaps/:id/commit', asyncHandler(submitCommitTransactions));
 
-  // router.get('/swaps/:id/txs/refund', asyncHandler(getRefundTransactions));
-  // router.post('/swaps/:id/refund', asyncHandler(submitRefundTransactions));
+  router.get('/swaps/:id/txs/refund', asyncHandler(getRefundTransactions));
+  router.post('/swaps/:id/refund', asyncHandler(submitRefundTransactions));
 
   // router.get('/swaps/:id/txs/claim', asyncHandler(getClaimTransactions));
 
