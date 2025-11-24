@@ -250,26 +250,18 @@ async function testRefundFlow() {
     // Step 6: Get unsigned refund transactions via REST API
     console.log('📝 Step 6: Getting unsigned refund transactions via REST API...');
 
-    const refundTxsResponse: any = await apiRequest(`/swaps/${swapId}/txs/refund`);
+    const refundResponse: any = await apiRequest(`/swaps/${swapId}/txs/refund`);
 
     console.log(`✅ Received unsigned refund transactions`);
-    console.log(`   Swap state: ${refundTxsResponse.state}`);
-    console.log(`   Number of transactions: ${refundTxsResponse.unsignedTxs.length}`);
+    console.log(`   Swap state: ${refundResponse.state}`);
+    console.log(`   Number of transactions: ${refundResponse.action.data.length}`);
 
-    const refundUnsignedActions = refundTxsResponse.unsignedTxs;
+    const refundUnsignedTxs = refundResponse.action;
 
     // Step 7: Sign and broadcast refund transactions
     console.log('\n✍️  Step 7: Signing and broadcasting refund transactions...');
-    console.log('   LP will provide refund authorization signature automatically\n');
-
-    const refundTxHashes: string[] = [];
-    for (let i = 0; i < refundUnsignedActions.length; i++) {
-      const unsignedAction = refundUnsignedActions[i];
-      console.log(`\n   Refund transaction ${i + 1}/${refundUnsignedActions.length}:`);
-      const txHashes = await signAndSubmitTransactions(unsignedAction, swapId);
-      refundTxHashes.push(...txHashes);
-    }
-
+    await signAndSubmitTransactions(refundUnsignedTxs, swapId);
+    
     console.log('\n✅ Refund transactions submitted!\n');
 
     // Step 8: Verify refund completion
@@ -277,7 +269,7 @@ async function testRefundFlow() {
 
     // Poll for a bit to see final state
     pollCount = 0;
-    while (pollCount < 10) {
+    while (true) {
       await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
       pollCount++;
 

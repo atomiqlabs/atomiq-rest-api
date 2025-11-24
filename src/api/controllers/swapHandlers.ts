@@ -321,12 +321,12 @@ export async function getRefundTransactions(req: Request, res: Response): Promis
     const chain = swap.chainIdentifier;
 
     // Wrap transactions with metadata
-    const unsignedTxs = wrapTransactionsWithMetadata(refundTxs, swap.getId(), 'refund', chain, swapType);
+    const action = wrapTransactionsWithMetadata(refundTxs, swap.getId(), 'refund', chain, swapType);
 
     res.json({
       swapId: swap.getId(),
       state: getStateName(swap.getState(), swapType),
-      unsignedTxs,
+      action,
     });
   } catch (error: any) {
     res.status(500).json({

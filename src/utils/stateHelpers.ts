@@ -14,11 +14,16 @@ import { ToBTCSwapState, FromBTCSwapState, FromBTCLNSwapState, SwapType } from '
 export function getStateName(stateNumber: number, swapType: SwapType): string {
   switch (swapType) {
     case SwapType.TO_BTC:
+    case SwapType.TO_BTCLN:
+      // Both TO_BTC and TO_BTCLN use ToBTCSwapState (they share the same base class)
       return ToBTCSwapState[stateNumber];
-      
-      // TODO: add other swap types here
 
-    // Future swap types can be added here
+    case SwapType.FROM_BTC:
+      return FromBTCSwapState[stateNumber];
+
+    case SwapType.FROM_BTCLN:
+      return FromBTCLNSwapState[stateNumber];
+
     default:
       throw new Error(`Unknown swap type: ${swapType} with state number: ${stateNumber}`);
   }
