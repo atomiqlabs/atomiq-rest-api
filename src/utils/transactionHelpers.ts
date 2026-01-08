@@ -2,13 +2,13 @@
  * Transaction metadata helpers for wrapping unsigned transactions
  */
 
-import { SwapType } from '@atomiqlabs/sdk';
+import { Swapper, SwapType } from '@atomiqlabs/sdk';
 import {
   TransactionType,
   UnsignedTransactionWithMetadata,
 } from '../types/api';
 import { serializeTransaction } from './sdkHelpers';
-
+import { swapper } from '../services';
 
 const txDescriptions: {[swapType in SwapType]?: Record<TransactionType, string>} = {
   [SwapType.TO_BTC]: {
@@ -34,7 +34,7 @@ export function wrapTransactionsWithMetadata(
   txs: any[],
   swapId: string,
   txType: TransactionType,
-  chain: string,
+  chain: string, // TODO sort out types
   swapType: SwapType,
 ): UnsignedTransactionWithMetadata {
   if (!txs || txs.length === 0) {
@@ -48,6 +48,6 @@ export function wrapTransactionsWithMetadata(
     txType,
     endpoint: `/swaps/${swapId}/${txType}`,
     description: txDescription,
-    data: txs.map((tx) => (serializeTransaction(tx))),
+    data: txs.map((tx) => (swapper.Utils.serializeUnsignedTransaction(chain as any, tx)))
   };
 }
